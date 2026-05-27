@@ -262,27 +262,6 @@
     <label>Department</label>
     <select id="filterDept">
       <option value="ALL">All Departments</option>
-            <option value="ACCT">ACCT</option>
-      <option value="ARAB">ARAB</option>
-      <option value="BIOL">BIOL</option>
-      <option value="BSTA">BSTA</option>
-      <option value="CEE">CEE</option>
-      <option value="CHEM">CHEM</option>
-      <option value="CIS">CIS</option>
-      <option value="CSE">CSE</option>
-      <option value="ECE">ECE</option>
-      <option value="ECON">ECON</option>
-      <option value="FIN">FIN</option>
-      <option value="FREN">FREN</option>
-      <option value="GER">GER</option>
-      <option value="HIST">HIST</option>
-      <option value="JAPN">JAPN</option>
-      <option value="LAT">LAT</option>
-      <option value="ME">ME</option>
-      <option value="OTHER">OTHER</option>
-      <option value="PHYS">PHYS</option>
-      <option value="PSYC">PSYC</option>
-      <option value="SPAN">SPAN</option>
     </select>
   </div>
   <div class="filter-group">
@@ -295,7 +274,6 @@
     <label>Month</label>
     <select id="filterMonth">
       <option value="ALL">All Months</option>
-      <option value="August">August</option><option value="September">September</option><option value="October">October</option><option value="November">November</option>
     </select>
   </div>
   <div class="filter-group">
@@ -650,7 +628,26 @@ function rebuildLocationFilter(records) {
     locs.map(l => `<option value="${l}"${l === prev ? ' selected' : ''}>${l}</option>`).join('');
 }
 
+function rebuildDeptFilter(records) {
+  const sel = document.getElementById('filterDept');
+  const prev = sel.value;
+  const depts = [...new Set(records.map(r => r.Dept).filter(d => d && d !== 'nan' && d !== 'OTHER'))].sort();
+  sel.innerHTML = '<option value="ALL">All Departments</option>' +
+    depts.map(d => `<option value="${d}"${d === prev ? ' selected' : ''}>${d}</option>`).join('');
+}
+
+const MONTH_ORDER = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+function rebuildMonthFilter(records) {
+  const sel = document.getElementById('filterMonth');
+  const prev = sel.value;
+  const months = [...new Set(records.map(r => r.Month).filter(Boolean))].sort((a,b) => MONTH_ORDER.indexOf(a) - MONTH_ORDER.indexOf(b));
+  sel.innerHTML = '<option value="ALL">All Months</option>' +
+    months.map(m => `<option value="${m}"${m === prev ? ' selected' : ''}>${m}</option>`).join('');
+}
+
 function applyFilters() {
+  rebuildDeptFilter(RAW_RECORDS);
+  rebuildMonthFilter(RAW_RECORDS);
   rebuildLocationFilter(RAW_RECORDS);
   const filtered = getFilteredRecords();
   const agg = computeAgg(filtered);
@@ -1320,17 +1317,7 @@ window.addEventListener('DOMContentLoaded', () => {
       document.getElementById('dashboardSubtitle').innerHTML = subtitle;
       document.getElementById('kpiSemesterLabel').textContent = semesterName + ' Semester';
 
-      // Rebuild filter dropdowns from saved data
-      const depts = [...new Set(records.map(r => r.Dept))].filter(d => d && d !== 'nan').sort();
-      const deptSel = document.getElementById('filterDept');
-      deptSel.innerHTML = '<option value="ALL">All Departments</option>';
-      depts.forEach(d => { const o = document.createElement('option'); o.value = d; o.textContent = d; deptSel.appendChild(o); });
-
-      const MONTH_ORDER = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-      const months = [...new Set(records.map(r => r.Month))].sort((a,b) => MONTH_ORDER.indexOf(a) - MONTH_ORDER.indexOf(b));
-      const monthSel = document.getElementById('filterMonth');
-      monthSel.innerHTML = '<option value="ALL">All Months</option>';
-      months.forEach(m => { const o = document.createElement('option'); o.value = m; o.textContent = m; monthSel.appendChild(o); });
+      // Filters rebuild automatically via applyFilters()
     }
   } catch(e) { /* ignore storage errors */ }
   applyFilters();
@@ -1484,26 +1471,7 @@ function handleFileUpload(input) {
         localStorage.setItem('lrc_dashboard_data', JSON.stringify({ version: DATA_VERSION, records: cleaned, semesterName, subtitle }));
       } catch(e) { /* storage full or unavailable */ }
 
-      // Rebuild department filter dropdown
-      const depts = [...new Set(cleaned.map(r => r.Dept))].filter(d => d && d !== 'nan').sort();
-      const deptSel = document.getElementById('filterDept');
-      deptSel.innerHTML = '<option value="ALL">All Departments</option>';
-      depts.forEach(d => {
-        const opt = document.createElement('option');
-        opt.value = d; opt.textContent = d;
-        deptSel.appendChild(opt);
-      });
-
-      // Rebuild month filter dropdown
-      const MONTH_ORDER = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-      const months = [...new Set(cleaned.map(r => r.Month))].sort((a,b) => MONTH_ORDER.indexOf(a) - MONTH_ORDER.indexOf(b));
-      const monthSel = document.getElementById('filterMonth');
-      monthSel.innerHTML = '<option value="ALL">All Months</option>';
-      months.forEach(m => {
-        const opt = document.createElement('option');
-        opt.value = m; opt.textContent = m;
-        monthSel.appendChild(opt);
-      });
+      // Filters rebuild automatically via applyFilters()
 
       applyFilters();
 
