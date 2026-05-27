@@ -408,7 +408,12 @@
       <div class="chart-card">
         <div class="chart-title">Appointments by Location</div>
         <div class="chart-subtitle">Breakdown by campus location</div>
-        <div class="chart-wrap"><canvas id="chartLocationBar" height="220"></canvas></div>
+        <div class="chart-wrap">
+          <canvas id="chartLocationBar" height="220"></canvas>
+          <div id="locationNoData" style="height:120px;align-items:center;justify-content:center;color:var(--text-muted);font-size:13px;display:none">
+            Location data will appear once a CSV with the Appt Location column is uploaded.
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -818,8 +823,16 @@ function buildLocationBar(filtered) {
   }
   const labels = locs.filter(l => data[l]);
   destroyChart('chartLocationBar');
-  if (!labels.length) return;
-  charts['chartLocationBar'] = new Chart(document.getElementById('chartLocationBar'), {
+  const canvas = document.getElementById('chartLocationBar');
+  const noDataEl = document.getElementById('locationNoData');
+  if (!labels.length) {
+    canvas.style.display = 'none';
+    if (noDataEl) noDataEl.style.display = 'flex';
+    return;
+  }
+  canvas.style.display = '';
+  if (noDataEl) noDataEl.style.display = 'none';
+  charts['chartLocationBar'] = new Chart(canvas, {
     type: 'bar',
     data: {
       labels,
@@ -1287,11 +1300,14 @@ function resetFilters() {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
+const DATA_VERSION = 2; // bump this whenever record schema changes
+
 window.addEventListener('DOMContentLoaded', () => {
   try {
     const saved = localStorage.getItem('lrc_dashboard_data');
     if (saved) {
-      const { records, semesterName, subtitle } = JSON.parse(saved);
+      const { records, semesterName, subtitle, version } = JSON.parse(saved);
+      if (version !== DATA_VERSION) throw new Error('stale cache');
       RAW_RECORDS = records;
       const titleText = semesterName + ' LRC Tutoring Analytics';
       document.getElementById('dashboardTitle').textContent = titleText;
@@ -1460,7 +1476,7 @@ function handleFileUpload(input) {
 
       // Persist to localStorage so data survives page close/reopen
       try {
-        localStorage.setItem('lrc_dashboard_data', JSON.stringify({ records: cleaned, semesterName, subtitle }));
+        localStorage.setItem('lrc_dashboard_data', JSON.stringify({ version: DATA_VERSION, records: cleaned, semesterName, subtitle }));
       } catch(e) { /* storage full or unavailable */ }
 
       // Rebuild department filter dropdown
