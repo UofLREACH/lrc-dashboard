@@ -20,8 +20,19 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Detect changed CSV
+        run: |
+          CHANGED=$(git diff --name-only HEAD~1 HEAD -- 'data/*.csv' | head -1)
+          if [ -z "$CHANGED" ]; then
+            CHANGED=$(git show --stat HEAD | grep 'data/.*\.csv' | head -1 | awk '{print $1}')
+          fi
+          echo "CHANGED_CSV=$CHANGED" >> $GITHUB_ENV
+          echo "Detected CSV: $CHANGED"
+
       - name: Process CSV and update dashboard
         run: python scripts/process_csv.py
+        env:
+          CHANGED_CSV: ${{ env.CHANGED_CSV }}
 
       - name: Commit updated dashboard
         run: |

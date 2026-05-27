@@ -108,13 +108,25 @@ def update_html(records, min_date, max_date, semester_name):
     HTML_FILE.write_text(html, encoding='utf-8')
 
 def main():
-    csvs = sorted(DATA_DIR.glob('*.csv'), key=lambda p: p.stat().st_mtime, reverse=True)
+    csvs = list(DATA_DIR.glob('*.csv'))
     if not csvs:
         print('No CSV files found in data/')
         sys.exit(0)
 
-    latest = csvs[0]
-    print(f'Processing: {latest.name}')
+    # Use the file git just changed if available, otherwise sort by name
+    changed_env = os.environ.get('CHANGED_CSV', '').strip()
+    if changed_env:
+        changed_path = ROOT / changed_env
+        if changed_path.exists():
+            latest = changed_path
+            csvs = [p for p in csvs if p != latest] + [latest]
+            print(f'Processing (from git): {latest.name}')
+        else:
+            latest = sorted(csvs, key=lambda p: p.name)[-1]
+            print(f'Processing (fallback): {latest.name}')
+    else:
+        latest = sorted(csvs, key=lambda p: p.name)[-1]
+        print(f'Processing (by name): {latest.name}')
 
     result = process_csv(latest)
     if not result:
