@@ -119,7 +119,6 @@ def main():
         changed_path = ROOT / changed_env
         if changed_path.exists():
             latest = changed_path
-            csvs = [p for p in csvs if p != latest] + [latest]
             print(f'Processing (from git): {latest.name}')
         else:
             latest = sorted(csvs, key=lambda p: p.name)[-1]
@@ -176,10 +175,11 @@ def main():
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding='utf-8')
     print(f'Updated manifest.json ({len(manifest)} semester(s))')
 
-    # Delete older CSVs -- keep only the most recent (current file)
-    for old_csv in csvs[1:]:
-        old_csv.unlink()
-        print(f'Removed old file: {old_csv.name}')
+    # Delete all CSVs except the one just processed
+    for old_csv in csvs:
+        if old_csv != latest:
+            old_csv.unlink()
+            print(f'Removed old file: {old_csv.name}')
 
     print(f'Done: Updated index.html -- {semester_name} | {len(records):,} records | {min_date.strftime("%b %-d")} - {max_date.strftime("%b %-d, %Y")}')
 
