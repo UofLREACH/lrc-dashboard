@@ -7,6 +7,13 @@
     "maxDate": "2026-04-22"
   },
   {
+    "name": "Summer 2026",
+    "file": "Summer 2026.json",
+    "records": 4369,
+    "minDate": "2025-08-25",
+    "maxDate": "2025-11-25"
+  },
+  {
     "name": "Fall 2025",
     "file": "Fall 2025.json",
     "records": 4369,
