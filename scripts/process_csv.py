@@ -4,6 +4,7 @@ LRC Dashboard - GitHub Actions processor
 Finds the latest CSV in data/, processes it, updates index.html
 """
 import os, json, re, csv, sys
+csv.field_size_limit(sys.maxsize)
 from datetime import datetime
 from pathlib import Path
 
