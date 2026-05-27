@@ -302,9 +302,6 @@
     <label>Location</label>
     <select id="filterLocation" onchange="applyFilters()" style="border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; font-size: 13px; background: white; color: var(--text); outline: none; transition: border-color 0.15s; cursor: pointer;">
       <option value="ALL">All Locations</option>
-      <option value="LRC: BAB 250">LRC: BAB 250</option>
-      <option value="Ekstrom Library">Ekstrom Library</option>
-      <option value="New Speed Building 224">New Speed Building 224</option>
     </select>
   </div>
   <span class="filter-count" id="filterCount">4,368 appointments</span>
@@ -645,7 +642,16 @@ function groupBy(records, key) {
   return map;
 }
 
+function rebuildLocationFilter(records) {
+  const sel = document.getElementById('filterLocation');
+  const prev = sel.value;
+  const locs = [...new Set(records.map(r => r.location).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="ALL">All Locations</option>' +
+    locs.map(l => `<option value="${l}"${l === prev ? ' selected' : ''}>${l}</option>`).join('');
+}
+
 function applyFilters() {
+  rebuildLocationFilter(RAW_RECORDS);
   const filtered = getFilteredRecords();
   const agg = computeAgg(filtered);
 
@@ -812,7 +818,6 @@ function rebuildAllCharts(filtered) {
 }
 
 function buildLocationBar(filtered) {
-  const locs = ['LRC: BAB 250', 'Ekstrom Library', 'New Speed Building 224'];
   const data = {};
   for (const r of filtered) {
     if (!r.location) continue;
@@ -821,7 +826,7 @@ function buildLocationBar(filtered) {
     else if (r.Status === 'Missed') data[r.location].missed++;
     else if (r.Status === 'Canceled') data[r.location].canceled++;
   }
-  const labels = locs.filter(l => data[l]);
+  const labels = Object.keys(data).sort();
   destroyChart('chartLocationBar');
   const canvas = document.getElementById('chartLocationBar');
   const noDataEl = document.getElementById('locationNoData');
