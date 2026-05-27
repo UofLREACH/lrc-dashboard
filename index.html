@@ -240,6 +240,30 @@
     .chart-grid-2 { grid-template-columns: 1fr; }
     .chart-grid-3 { grid-template-columns: 1fr; }
   }
+
+  /* ── Semester Archive ── */
+  .semester-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; border-radius: 8px; border: 1px solid var(--border);
+    margin-bottom: 8px; background: white;
+  }
+  .semester-row:hover { border-color: var(--blue); background: var(--blue-light); }
+  .semester-row.active-semester { border-color: var(--blue); background: var(--blue-light); }
+  .semester-row.compare-selected { border-color: #AD0000; background: #fff5f5; }
+  .semester-info { flex: 1; }
+  .semester-name { font-weight: 700; font-size: 14px; color: var(--text); }
+  .semester-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .semester-actions { display: flex; gap: 8px; align-items: center; }
+  .btn-view {
+    padding: 5px 14px; font-size: 12px; font-weight: 600; border-radius: 6px;
+    border: 1px solid var(--blue); background: white; color: var(--blue); cursor: pointer;
+  }
+  .btn-view:hover { background: var(--blue); color: white; }
+  .btn-view.current { background: var(--blue); color: white; }
+  .btn-compare-check {
+    width: 18px; height: 18px; cursor: pointer; accent-color: #AD0000;
+  }
+  .compare-label { font-size: 12px; color: var(--text-muted); }
 </style>
 </head>
 <body>
@@ -349,6 +373,7 @@
     <button class="tab-btn" onclick="switchTab('trends', this)">Attendance Trends</button>
     <button class="tab-btn" onclick="switchTab('tutors', this)">Tutor Utilization</button>
     <button class="tab-btn" onclick="switchTab('subjects', this)">Subject Demand</button>
+    <button class="tab-btn" onclick="switchTab('semesters', this); loadSemesterManifest()">Semesters</button>
   </div>
 </div>
 
@@ -549,6 +574,62 @@
       </tr></thead>
       <tbody id="modalCourseBody"></tbody>
     </table>
+  </div>
+</div>
+
+<!-- SEMESTERS TAB -->
+<div id="tab-semesters" class="tab-panel">
+  <div class="tab-content">
+
+    <!-- Archive list -->
+    <div class="chart-grid-1">
+      <div class="chart-card">
+        <div class="chart-title">Semester Archive</div>
+        <div class="chart-subtitle">All available semesters — click View to load, or select two to compare</div>
+        <div id="semesterList" style="margin-top:12px">
+          <div style="color:var(--text-muted);font-size:13px">Loading semester archive...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Comparison panel (hidden until 2 selected) -->
+    <div id="comparePanel" style="display:none">
+
+      <!-- KPI comparison cards -->
+      <div class="chart-grid-1">
+        <div class="chart-card">
+          <div class="chart-title" id="comparePanelTitle">Semester Comparison</div>
+          <div id="compareKpis" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:16px"></div>
+        </div>
+      </div>
+
+      <!-- Overlay charts -->
+      <div class="chart-grid-2">
+        <div class="chart-card">
+          <div class="chart-title">Attendance Rate by Week</div>
+          <div class="chart-subtitle">Weekly attended % for each semester</div>
+          <div class="chart-wrap"><canvas id="chartCompareWeek" height="220"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Appointments by Day of Week</div>
+          <div class="chart-subtitle">Volume comparison by day</div>
+          <div class="chart-wrap"><canvas id="chartCompareDay" height="220"></canvas></div>
+        </div>
+      </div>
+      <div class="chart-grid-2">
+        <div class="chart-card">
+          <div class="chart-title">No-Show Rate by Month</div>
+          <div class="chart-subtitle">Missed % by month</div>
+          <div class="chart-wrap"><canvas id="chartCompareMonth" height="220"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Top 10 Courses</div>
+          <div class="chart-subtitle">Total appointments by course</div>
+          <div class="chart-wrap"><canvas id="chartCompareCourse" height="220"></canvas></div>
+        </div>
+      </div>
+
+    </div>
   </div>
 </div>
 
@@ -1489,6 +1570,253 @@ function handleFileUpload(input) {
   if (isCsv) { reader.readAsText(file); } else { reader.readAsArrayBuffer(file); }
   // Reset input so the same file can be re-uploaded
   input.value = '';
+}
+
+// ── Semester Archive ───────────────────────────────────────────────────────────
+let semesterManifest = [];
+let compareSelections = []; // up to 2 semester names selected for comparison
+let semesterDataCache = {}; // cache fetched semester JSON by name
+
+async function loadSemesterManifest() {
+  try {
+    const res = await fetch('data/manifest.json?t=' + Date.now());
+    if (!res.ok) throw new Error('not found');
+    semesterManifest = await res.json();
+  } catch(e) {
+    semesterManifest = [];
+  }
+  renderSemesterList();
+}
+
+function renderSemesterList() {
+  const el = document.getElementById('semesterList');
+  if (!semesterManifest.length) {
+    el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:12px 0">No archived semesters yet. Upload a CSV to create the first archive.</div>';
+    return;
+  }
+
+  // Current active semester name (from dashboard title)
+  const currentTitle = document.getElementById('dashboardTitle').textContent;
+  const currentSemester = currentTitle.replace(' LRC Appointment/Visit Analytics','').trim();
+
+  el.innerHTML = semesterManifest.map(s => {
+    const isCurrent = s.name === currentSemester;
+    const isCompare = compareSelections.includes(s.name);
+    const fmt = d => { const dt = new Date(d+'T00:00:00'); return dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); };
+    return `
+      <div class="semester-row${isCurrent?' active-semester':''}${isCompare?' compare-selected':''}" id="srow-${CSS.escape(s.name)}">
+        <div class="semester-info">
+          <div class="semester-name">${s.name}${isCurrent?' <span style="font-size:11px;color:var(--blue);font-weight:500">(current)</span>':''}</div>
+          <div class="semester-meta">${fmt(s.minDate)} – ${fmt(s.maxDate)} &nbsp;&middot;&nbsp; ${s.records.toLocaleString()} appointments</div>
+        </div>
+        <div class="semester-actions">
+          <span class="compare-label">Compare</span>
+          <input type="checkbox" class="btn-compare-check" ${isCompare?'checked':''} onchange="toggleCompareSelection('${s.name}', this.checked)">
+          <button class="btn-view${isCurrent?' current':''}" onclick="loadSemester('${s.name}')">${isCurrent?'Loaded':'View'}</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function loadSemester(semesterName) {
+  // If we have cached data, use it; otherwise fetch
+  if (!semesterDataCache[semesterName]) {
+    const entry = semesterManifest.find(s => s.name === semesterName);
+    if (!entry) return;
+    try {
+      const res = await fetch('data/' + encodeURIComponent(entry.file) + '?t=' + Date.now());
+      semesterDataCache[semesterName] = await res.json();
+    } catch(e) {
+      alert('Could not load ' + semesterName + ' data.');
+      return;
+    }
+  }
+
+  RAW_RECORDS = semesterDataCache[semesterName];
+
+  // Update title
+  const titleText = semesterName + ' LRC Appointment/Visit Analytics';
+  document.getElementById('dashboardTitle').textContent = titleText;
+  document.title = titleText;
+  document.getElementById('kpiSemesterLabel').textContent = semesterName + ' Semester';
+
+  // Update subtitle dates from data
+  const dates = RAW_RECORDS.map(r => new Date(r.Date)).filter(d => !isNaN(d));
+  if (dates.length) {
+    const minD = new Date(Math.min(...dates));
+    const maxD = new Date(Math.max(...dates));
+    const fmt = d => d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    document.getElementById('dashboardSubtitle').innerHTML = `Learning Resource Center — ${fmt(minD)} – ${fmt(maxD)}`;
+  }
+
+  applyFilters();
+  renderSemesterList();
+}
+
+function toggleCompareSelection(semesterName, checked) {
+  if (checked) {
+    if (compareSelections.length >= 2) {
+      // Uncheck oldest selection
+      compareSelections.shift();
+    }
+    compareSelections.push(semesterName);
+  } else {
+    compareSelections = compareSelections.filter(s => s !== semesterName);
+  }
+  renderSemesterList();
+  if (compareSelections.length === 2) {
+    buildComparison();
+  } else {
+    document.getElementById('comparePanel').style.display = 'none';
+  }
+}
+
+async function buildComparison() {
+  const [nameA, nameB] = compareSelections;
+
+  // Fetch both if not cached
+  for (const name of [nameA, nameB]) {
+    if (!semesterDataCache[name]) {
+      const entry = semesterManifest.find(s => s.name === name);
+      if (!entry) return;
+      try {
+        const res = await fetch('data/' + encodeURIComponent(entry.file) + '?t=' + Date.now());
+        semesterDataCache[name] = await res.json();
+      } catch(e) {
+        alert('Could not load ' + name); return;
+      }
+    }
+  }
+
+  const recA = semesterDataCache[nameA];
+  const recB = semesterDataCache[nameB];
+
+  document.getElementById('comparePanelTitle').textContent = nameA + ' vs ' + nameB;
+  document.getElementById('comparePanel').style.display = '';
+
+  // ── KPI cards ──
+  function aggRecs(recs) {
+    const total = recs.length;
+    const attended = recs.filter(r=>r.Status==='Attended').length;
+    const missed = recs.filter(r=>r.Status==='Missed').length;
+    const canceled = recs.filter(r=>r.Status==='Canceled').length;
+    const students = new Set(recs.map(r=>r.studentId)).size;
+    const avgVisits = students ? (attended/students).toFixed(1) : '0';
+    const attendedIds = new Set(recs.filter(r=>r.Status==='Attended').map(r=>r.studentId));
+    const neverAtt = new Set(recs.map(r=>r.studentId).filter(id => !attendedIds.has(id))).size;
+    return { total, attended, missed, canceled, students, avgVisits, neverAtt,
+             attPct: total?(attended/total*100).toFixed(1):0,
+             misPct: total?(missed/total*100).toFixed(1):0 };
+  }
+
+  const aggA = aggRecs(recA), aggB = aggRecs(recB);
+  const kpiRows = [
+    ['Total Appointments', aggA.total.toLocaleString(), aggB.total.toLocaleString()],
+    ['Attended', `${aggA.attended.toLocaleString()} (${aggA.attPct}%)`, `${aggB.attended.toLocaleString()} (${aggB.attPct}%)`],
+    ['Missed', `${aggA.missed.toLocaleString()} (${aggA.misPct}%)`, `${aggB.missed.toLocaleString()} (${aggB.misPct}%)`],
+    ['Unique Students', aggA.students.toLocaleString(), aggB.students.toLocaleString()],
+    ['Avg Visits / Student', aggA.avgVisits, aggB.avgVisits],
+    ['Never Attended', aggA.neverAtt.toLocaleString(), aggB.neverAtt.toLocaleString()],
+  ];
+
+  document.getElementById('compareKpis').innerHTML = `
+    <div>
+      <div style="font-weight:700;font-size:15px;color:#AD0000;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid #AD0000">${nameA}</div>
+      ${kpiRows.map(r=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:var(--text-muted)">${r[0]}</span><strong>${r[1]}</strong></div>`).join('')}
+    </div>
+    <div>
+      <div style="font-weight:700;font-size:15px;color:var(--blue);margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid var(--blue)">${nameB}</div>
+      ${kpiRows.map(r=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="color:var(--text-muted)">${r[0]}</span><strong>${r[2]}</strong></div>`).join('')}
+    </div>`;
+
+  // ── Overlay charts ──
+  const DAYS_ORDER = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
+  const MONTH_ORDER_ALL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  // Weekly attendance rate
+  function weeklyAttRate(recs) {
+    const weeks = {};
+    for (const r of recs) {
+      if (!weeks[r.WeekNum]) weeks[r.WeekNum] = {attended:0,total:0};
+      weeks[r.WeekNum].total++;
+      if (r.Status==='Attended') weeks[r.WeekNum].attended++;
+    }
+    return Object.entries(weeks).sort((a,b)=>+a[0]-+b[0]).map(([wk,v])=>({
+      label:'Wk '+wk, rate: v.total?(v.attended/v.total*100).toFixed(1):0
+    }));
+  }
+  const wA = weeklyAttRate(recA), wB = weeklyAttRate(recB);
+  const maxWeeks = Math.max(wA.length, wB.length);
+  const weekLabels = Array.from({length:maxWeeks},(_,i)=>'Wk '+(i+1));
+
+  destroyChart('chartCompareWeek');
+  charts['chartCompareWeek'] = new Chart(document.getElementById('chartCompareWeek'), {
+    type:'line',
+    data:{
+      labels: weekLabels,
+      datasets:[
+        {label:nameA, data:wA.map(w=>w.rate), borderColor:'#AD0000', backgroundColor:'rgba(173,0,0,0.1)', tension:0.3, fill:true, pointRadius:3},
+        {label:nameB, data:wB.map(w=>w.rate), borderColor:'#2563EB', backgroundColor:'rgba(37,99,235,0.1)', tension:0.3, fill:true, pointRadius:3},
+      ]
+    },
+    options:{...barOpts(), scales:{y:{beginAtZero:true,max:100,ticks:{callback:v=>v+'%'}}}}
+  });
+
+  // Day of week volume
+  function dayVolume(recs) {
+    const d={};
+    for(const r of recs){if(!d[r.DayOfWeek])d[r.DayOfWeek]=0;d[r.DayOfWeek]++;}
+    return DAYS_ORDER.map(day=>d[day]||0);
+  }
+  destroyChart('chartCompareDay');
+  charts['chartCompareDay'] = new Chart(document.getElementById('chartCompareDay'),{
+    type:'bar',
+    data:{labels:DAYS_ORDER.map(d=>d.slice(0,3)),datasets:[
+      {label:nameA,data:dayVolume(recA),backgroundColor:'rgba(173,0,0,0.7)'},
+      {label:nameB,data:dayVolume(recB),backgroundColor:'rgba(37,99,235,0.7)'},
+    ]},
+    options:{...barOpts(),scales:{x:{},y:{beginAtZero:true}}}
+  });
+
+  // Monthly missed rate
+  function monthMissRate(recs) {
+    const m={};
+    for(const r of recs){if(!m[r.Month])m[r.Month]={missed:0,total:0};m[r.Month].total++;if(r.Status==='Missed')m[r.Month].missed++;}
+    const months=[...new Set(recs.map(r=>r.Month))].sort((a,b)=>MONTH_ORDER_ALL.indexOf(a)-MONTH_ORDER_ALL.indexOf(b));
+    return {labels:months,rates:months.map(mo=>m[mo].total?(m[mo].missed/m[mo].total*100).toFixed(1):0)};
+  }
+  const mmA=monthMissRate(recA),mmB=monthMissRate(recB);
+  const allMonths=[...new Set([...mmA.labels,...mmB.labels])].sort((a,b)=>MONTH_ORDER_ALL.indexOf(a)-MONTH_ORDER_ALL.indexOf(b));
+  const mmAMap=Object.fromEntries(mmA.labels.map((l,i)=>[l,mmA.rates[i]]));
+  const mmBMap=Object.fromEntries(mmB.labels.map((l,i)=>[l,mmB.rates[i]]));
+  destroyChart('chartCompareMonth');
+  charts['chartCompareMonth']=new Chart(document.getElementById('chartCompareMonth'),{
+    type:'bar',
+    data:{labels:allMonths,datasets:[
+      {label:nameA,data:allMonths.map(m=>mmAMap[m]||0),backgroundColor:'rgba(173,0,0,0.7)'},
+      {label:nameB,data:allMonths.map(m=>mmBMap[m]||0),backgroundColor:'rgba(37,99,235,0.7)'},
+    ]},
+    options:{...barOpts(),scales:{x:{},y:{beginAtZero:true,ticks:{callback:v=>v+'%'}}}}
+  });
+
+  // Top 10 courses
+  function topCourses(recs, n=10) {
+    const c={};
+    for(const r of recs){if(!r.CourseCode||r.CourseCode==='nan')continue;c[r.CourseCode]=(c[r.CourseCode]||0)+1;}
+    return Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,n);
+  }
+  const tcA=topCourses(recA),tcB=topCourses(recB);
+  const allCourses=[...new Set([...tcA.map(c=>c[0]),...tcB.map(c=>c[0])])];
+  const tcAMap=Object.fromEntries(tcA),tcBMap=Object.fromEntries(tcB);
+  destroyChart('chartCompareCourse');
+  charts['chartCompareCourse']=new Chart(document.getElementById('chartCompareCourse'),{
+    type:'bar',
+    data:{labels:allCourses,datasets:[
+      {label:nameA,data:allCourses.map(c=>tcAMap[c]||0),backgroundColor:'rgba(173,0,0,0.7)'},
+      {label:nameB,data:allCourses.map(c=>tcBMap[c]||0),backgroundColor:'rgba(37,99,235,0.7)'},
+    ]},
+    options:{...barOpts(),indexAxis:'y',scales:{x:{beginAtZero:true},y:{}}}
+  });
 }
 
 </script>

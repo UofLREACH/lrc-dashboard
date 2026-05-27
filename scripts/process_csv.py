@@ -131,6 +131,39 @@ def main():
 
     update_html(records, min_date, max_date, semester_name)
 
+    # ── Save semester JSON archive ────────────────────────────────────────────
+    semester_json_path = DATA_DIR / f'{semester_name}.json'
+    semester_json_path.write_text(json.dumps(records, separators=(',', ':')), encoding='utf-8')
+    print(f'Saved semester archive: {semester_json_path.name}')
+
+    # ── Update manifest.json ──────────────────────────────────────────────────
+    manifest_path = DATA_DIR / 'manifest.json'
+    if manifest_path.exists():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+        except Exception:
+            manifest = []
+    else:
+        manifest = []
+
+    # Remove existing entry with same semester name
+    manifest = [e for e in manifest if e.get('name') != semester_name]
+
+    # Add new entry at front
+    manifest.insert(0, {
+        'name': semester_name,
+        'file': f'{semester_name}.json',
+        'records': len(records),
+        'minDate': min_date.strftime('%Y-%m-%d'),
+        'maxDate': max_date.strftime('%Y-%m-%d'),
+    })
+
+    # Sort by minDate descending (newest first)
+    manifest.sort(key=lambda e: e.get('minDate', ''), reverse=True)
+
+    manifest_path.write_text(json.dumps(manifest, indent=2), encoding='utf-8')
+    print(f'Updated manifest.json ({len(manifest)} semester(s))')
+
     # Delete older CSVs -- keep only the most recent (current file)
     for old_csv in csvs[1:]:
         old_csv.unlink()
