@@ -121,8 +121,19 @@ def main():
         sys.exit(1)
 
     records, min_date, max_date = result
-    semester_name = latest.stem
+
+    # Strip trailing date portion from filename (e.g. "Spring 2026 - 2026-05-27" → "Spring 2026")
+    semester_name = re.sub(r'\s*[-_]\s*\d{4}[-/]\d{2}[-/]\d{2}$', '', latest.stem).strip()
+    semester_name = re.sub(r'\s*[-_]\s*\d{2}[-/]\d{2}[-/]\d{4}$', '', semester_name).strip()
+    if not semester_name:
+        semester_name = latest.stem  # fallback to full filename if stripping leaves nothing
+
     update_html(records, min_date, max_date, semester_name)
+
+    # Delete older CSVs -- keep only the most recent (current file)
+    for old_csv in csvs[1:]:
+        old_csv.unlink()
+        print(f'Removed old file: {old_csv.name}')
 
     print(f'Done: Updated index.html -- {semester_name} | {len(records):,} records | {min_date.strftime("%b %-d")} - {max_date.strftime("%b %-d, %Y")}')
 
