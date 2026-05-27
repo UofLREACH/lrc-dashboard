@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Spring 2026 LRC Tutoring Analytics</title>
+<title>Spring 2026 LRC Appointment/Visit Analytics</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
@@ -246,7 +246,7 @@
 
 <header class="header">
   <div class="header-left">
-    <h1 id="dashboardTitle">Spring 2026 LRC Tutoring Analytics</h1>
+    <h1 id="dashboardTitle">Spring 2026 LRC Appointment/Visit Analytics</h1>
     <p id="dashboardSubtitle">Learning Resource Center &mdash; Jan 12, 2026 – Apr 22, 2026</p>
   </div>
   <div style="display:flex;align-items:center;gap:14px;">
@@ -1314,7 +1314,7 @@ window.addEventListener('DOMContentLoaded', () => {
       const { records, semesterName, subtitle, version } = JSON.parse(saved);
       if (version !== DATA_VERSION) throw new Error('stale cache');
       RAW_RECORDS = records;
-      const titleText = semesterName + ' LRC Tutoring Analytics';
+      const titleText = semesterName + ' LRC Appointment/Visit Analytics';
       document.getElementById('dashboardTitle').textContent = titleText;
       document.title = titleText;
       document.getElementById('dashboardSubtitle').innerHTML = subtitle;
@@ -1468,7 +1468,7 @@ function handleFileUpload(input) {
 
       // Update title from filename and date range from data
       const semesterName = file.name.replace(/\.(xlsx|csv)$/i, '');
-      const titleText = semesterName + ' LRC Tutoring Analytics';
+      const titleText = semesterName + ' LRC Appointment/Visit Analytics';
       document.getElementById('dashboardTitle').textContent = titleText;
       document.title = titleText;
       const allDates = cleaned.map(r => new Date(r.Date)).filter(d => !isNaN(d));

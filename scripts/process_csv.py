@@ -97,7 +97,7 @@ def update_html(records, min_date, max_date, semester_name):
     # Format dates
     def fmt(d): return d.strftime('%b %-d, %Y')
     subtitle = f'Learning Resource Center &mdash; {fmt(min_date)} – {fmt(max_date)}'
-    title_text = f'{semester_name} LRC Tutoring Analytics'
+    title_text = f'{semester_name} LRC Appointment/Visit Analytics'
 
     # Update title elements
     html = re.sub(r'<title>.*?</title>', f'<title>{title_text}</title>', html)
