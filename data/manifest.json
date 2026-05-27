@@ -5,5 +5,12 @@
     "records": 2958,
     "minDate": "2026-01-12",
     "maxDate": "2026-04-22"
+  },
+  {
+    "name": "Fall 2025",
+    "file": "Fall 2025.json",
+    "records": 4369,
+    "minDate": "2025-08-25",
+    "maxDate": "2025-11-25"
   }
 ]
