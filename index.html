@@ -1245,7 +1245,6 @@ function buildWeekOverview(filtered) {
 }
 
 function buildMonthOverview(filtered) {
-  const monthOrder = ['August','September','October','November'];
   const mo = {};
   for (const r of filtered) {
     if (!mo[r.Month]) mo[r.Month] = {total:0,attended:0,missed:0,canceled:0};
@@ -1254,7 +1253,7 @@ function buildMonthOverview(filtered) {
     else if (r.Status==='Missed') mo[r.Month].missed++;
     else if (r.Status==='Canceled') mo[r.Month].canceled++;
   }
-  const labels = monthOrder.filter(m => mo[m]);
+  const labels = MONTH_ORDER.filter(m => mo[m]);
   destroyChart('chartMonthOverview');
   charts['chartMonthOverview'] = new Chart(document.getElementById('chartMonthOverview'), {
     type: 'bar',
