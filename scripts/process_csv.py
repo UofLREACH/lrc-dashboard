@@ -80,6 +80,7 @@ def process_csv(filepath):
             'Dept': dept,
             'studentId': sid,
             'location': str(row.get('Appt Location', '') or '').strip(),
+            'student': str(row.get('Student', '') or '').strip(),
         })
 
     return records, min_date, max_date
