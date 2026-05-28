@@ -641,15 +641,15 @@
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
         <div>
           <div class="chart-title">At-Risk Students</div>
-          <div class="chart-subtitle">Students with repeated missed appointments — may need outreach</div>
+          <div class="chart-subtitle">Students with consecutive missed appointments for the same course — no attended visit breaking the streak</div>
         </div>
         <div style="display:flex;align-items:center;gap:10px">
-          <label style="font-size:13px;font-weight:600;color:var(--text-muted)">Show students with</label>
+          <label style="font-size:13px;font-weight:600;color:var(--text-muted)">Show streaks of</label>
           <select id="missThreshold" onchange="renderAtRiskTable()" style="font-size:13px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);color:var(--text);background:white">
-            <option value="2">2+ misses</option>
-            <option value="3" selected>3+ misses</option>
-            <option value="4">4+ misses</option>
-            <option value="5">5+ misses</option>
+            <option value="2">2+ consecutive</option>
+            <option value="3" selected>3+ consecutive</option>
+            <option value="4">4+ consecutive</option>
+            <option value="5">5+ consecutive</option>
           </select>
           <span id="atRiskCount" style="font-size:13px;color:var(--text-muted)"></span>
         </div>
@@ -661,12 +661,12 @@
         <thead>
           <tr>
             <th onclick="sortAtRisk('student')" style="cursor:pointer">Student <span class="sort-arrow">&#8597;</span></th>
-            <th onclick="sortAtRisk('missed')" style="cursor:pointer">Misses <span class="sort-arrow">&#8595;</span></th>
-            <th onclick="sortAtRisk('total')" style="cursor:pointer">Total Appts <span class="sort-arrow">&#8597;</span></th>
-            <th onclick="sortAtRisk('missRate')" style="cursor:pointer">Miss Rate <span class="sort-arrow">&#8597;</span></th>
-            <th>Courses Missed</th>
-            <th>Tutors</th>
-            <th onclick="sortAtRisk('lastMiss')" style="cursor:pointer">Last Miss <span class="sort-arrow">&#8597;</span></th>
+            <th onclick="sortAtRisk('course')" style="cursor:pointer">Course <span class="sort-arrow">&#8597;</span></th>
+            <th onclick="sortAtRisk('streak')" style="cursor:pointer">Consecutive Misses <span class="sort-arrow">&#8595;</span></th>
+            <th onclick="sortAtRisk('total')" style="cursor:pointer">Appts (Course) <span class="sort-arrow">&#8597;</span></th>
+            <th>Tutor(s)</th>
+            <th onclick="sortAtRisk('streakStart')" style="cursor:pointer">Streak Started <span class="sort-arrow">&#8597;</span></th>
+            <th onclick="sortAtRisk('streakEnd')" style="cursor:pointer">Last Miss <span class="sort-arrow">&#8597;</span></th>
           </tr>
         </thead>
         <tbody id="atRiskTableBody"></tbody>
@@ -700,89 +700,105 @@ let currentTutorBarData = [];
 
 // ── At-Risk Students ──────────────────────────────────────────────────────────
 let atRiskData = [];
-let atRiskSortKey = 'missed';
+let atRiskSortKey = 'streak';
 let atRiskSortDir = -1;
 
 function buildAtRiskData(filtered) {
-  const byStudent = {};
+  // Group by studentId + CourseCode
+  const groups = {};
   for (const r of filtered) {
-    const key = r.studentId;
-    if (!key) continue;
-    if (!byStudent[key]) {
-      byStudent[key] = {
-        studentId: key,
-        student: r.student || ('Student #' + key),
-        total: 0, missed: 0, attended: 0, canceled: 0,
-        coursesMissed: new Set(),
-        tutors: new Set(),
-        lastMiss: null,
-      };
-    }
-    const s = byStudent[key];
-    s.total++;
-    if (r.Status === 'Missed') {
-      s.missed++;
-      s.coursesMissed.add(r.CourseCode !== 'nan' ? r.CourseCode : '');
-      s.tutors.add(r.tutor);
-      if (!s.lastMiss || r.Date > s.lastMiss) s.lastMiss = r.Date;
-    } else if (r.Status === 'Attended') {
-      s.attended++;
-    } else if (r.Status === 'Canceled') {
-      s.canceled++;
-    }
+    if (!r.studentId || !r.CourseCode || r.CourseCode === 'nan') continue;
+    const key = r.studentId + '|' + r.CourseCode;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(r);
   }
 
-  return Object.values(byStudent).map(s => ({
-    ...s,
-    missRate: s.total ? +(s.missed / s.total * 100).toFixed(1) : 0,
-    coursesMissed: [...s.coursesMissed].filter(Boolean).sort().join(', ') || '—',
-    tutors: [...s.tutors].filter(Boolean).sort().join(', ') || '—',
-  }));
+  const rows = [];
+  for (const [key, recs] of Object.entries(groups)) {
+    // Sort chronologically, ignore Canceled for streak purposes
+    const relevant = recs
+      .filter(r => r.Status === 'Attended' || r.Status === 'Missed')
+      .sort((a, b) => (a.Date > b.Date ? 1 : -1));
+
+    // Find longest consecutive miss streak
+    let maxStreak = 0, curStreak = 0;
+    let curStart = null, bestStart = null, bestEnd = null;
+
+    for (const r of relevant) {
+      if (r.Status === 'Missed') {
+        if (curStreak === 0) curStart = r.Date;
+        curStreak++;
+        if (curStreak > maxStreak) {
+          maxStreak = curStreak;
+          bestStart = curStart;
+          bestEnd = r.Date;
+        }
+      } else {
+        curStreak = 0;
+        curStart = null;
+      }
+    }
+
+    if (maxStreak < 1) continue;
+
+    const [sid, course] = key.split('|');
+    const tutors = [...new Set(recs.filter(r => r.Status === 'Missed').map(r => r.tutor).filter(Boolean))].sort();
+    const sample = recs[0];
+
+    rows.push({
+      studentId: sid,
+      student: sample.student || ('ID: ' + sid),
+      course,
+      streak: maxStreak,
+      total: recs.length,
+      tutors: tutors.join(', ') || '—',
+      streakStart: bestStart,
+      streakEnd: bestEnd,
+    });
+  }
+
+  return rows;
 }
 
 function renderAtRiskTable() {
   const threshold = parseInt(document.getElementById('missThreshold').value) || 3;
-  const qualifying = atRiskData.filter(s => s.missed >= threshold);
+  const qualifying = atRiskData.filter(s => s.streak >= threshold);
 
-  // Sort
   qualifying.sort((a, b) => {
-    let va = a[atRiskSortKey], vb = b[atRiskSortKey];
-    if (va === null) va = '';
-    if (vb === null) vb = '';
+    let va = a[atRiskSortKey] ?? '', vb = b[atRiskSortKey] ?? '';
     if (typeof va === 'string') return atRiskSortDir * va.localeCompare(vb);
     return atRiskSortDir * (va - vb);
   });
 
-  document.getElementById('atRiskCount').textContent = qualifying.length + ' student' + (qualifying.length !== 1 ? 's' : '');
+  const count = qualifying.length;
+  document.getElementById('atRiskCount').textContent = count + ' student' + (count !== 1 ? 's' : '');
 
   const tbody = document.getElementById('atRiskTableBody');
   const empty = document.getElementById('atRiskEmpty');
 
-  if (!qualifying.length) {
+  if (!count) {
     tbody.innerHTML = '';
     empty.style.display = '';
     return;
   }
   empty.style.display = 'none';
 
-  tbody.innerHTML = qualifying.map(s => {
-    const lastMissFormatted = s.lastMiss ? new Date(s.lastMiss + 'T00:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : '—';
-    const studentDisplay = s.student || ('ID: ' + s.studentId);
-    return `<tr>
-      <td><strong>${studentDisplay}</strong></td>
-      <td><span style="background:#FEE2E2;color:#991B1B;padding:2px 8px;border-radius:12px;font-weight:700;font-size:13px">${s.missed}</span></td>
-      <td>${s.total}</td>
-      <td>${rateBadge(s.missRate)}</td>
-      <td style="font-size:12px;color:var(--text-muted)">${s.coursesMissed}</td>
-      <td style="font-size:12px;color:var(--text-muted)">${s.tutors}</td>
-      <td style="font-size:12px">${lastMissFormatted}</td>
-    </tr>`;
-  }).join('');
+  const fmt = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : '—';
+
+  tbody.innerHTML = qualifying.map(s => `<tr>
+    <td><strong>${s.student}</strong></td>
+    <td><strong>${s.course}</strong></td>
+    <td style="text-align:center"><span style="background:#FEE2E2;color:#991B1B;padding:2px 10px;border-radius:12px;font-weight:700;font-size:13px">${s.streak}</span></td>
+    <td style="text-align:center">${s.total}</td>
+    <td style="font-size:12px;color:var(--text-muted)">${s.tutors}</td>
+    <td style="font-size:12px">${fmt(s.streakStart)}</td>
+    <td style="font-size:12px">${fmt(s.streakEnd)}</td>
+  </tr>`).join('');
 }
 
 function sortAtRisk(key) {
   if (atRiskSortKey === key) atRiskSortDir *= -1;
-  else { atRiskSortKey = key; atRiskSortDir = key === 'student' ? 1 : -1; }
+  else { atRiskSortKey = key; atRiskSortDir = (key === 'student' || key === 'course') ? 1 : -1; }
   renderAtRiskTable();
 }
 
