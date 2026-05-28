@@ -1,17 +1,17 @@
 [
   {
-    "name": "Spring 2026 5-26-2026",
-    "file": "Spring 2026 5-26-2026.json",
+    "name": "Summer 2026",
+    "file": "Summer 2026.json",
     "records": 2958,
     "minDate": "2026-01-12",
     "maxDate": "2026-04-22"
   },
   {
-    "name": "Summer 2026",
-    "file": "Summer 2026.json",
-    "records": 4369,
-    "minDate": "2025-08-25",
-    "maxDate": "2025-11-25"
+    "name": "Spring 2026 5-26-2026",
+    "file": "Spring 2026 5-26-2026.json",
+    "records": 2958,
+    "minDate": "2026-01-12",
+    "maxDate": "2026-04-22"
   },
   {
     "name": "Fall 2025",
