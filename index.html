@@ -675,6 +675,36 @@
         No students meet this threshold with the current filters.
       </div>
     </div>
+
+    <!-- Never Attended section -->
+    <div class="chart-card" style="margin-top:24px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div class="chart-title">Never Attended</div>
+          <div class="chart-subtitle">Students who booked appointments but have zero attended visits</div>
+        </div>
+        <span id="neverAttendedCount" style="font-size:13px;color:var(--text-muted)"></span>
+      </div>
+    </div>
+    <div class="table-card">
+      <table class="data-table" style="width:100%">
+        <thead>
+          <tr>
+            <th onclick="sortNeverAttended('student')" style="cursor:pointer">Student <span class="sort-arrow">&#8597;</span></th>
+            <th onclick="sortNeverAttended('total')" style="cursor:pointer">Total Appts <span class="sort-arrow">&#8595;</span></th>
+            <th onclick="sortNeverAttended('missed')" style="cursor:pointer">Missed <span class="sort-arrow">&#8597;</span></th>
+            <th onclick="sortNeverAttended('canceled')" style="cursor:pointer">Canceled <span class="sort-arrow">&#8597;</span></th>
+            <th>Courses</th>
+            <th>Tutor(s)</th>
+            <th onclick="sortNeverAttended('lastAppt')" style="cursor:pointer">Last Appt <span class="sort-arrow">&#8597;</span></th>
+          </tr>
+        </thead>
+        <tbody id="neverAttendedTableBody"></tbody>
+      </table>
+      <div id="neverAttendedEmpty" style="display:none;padding:32px;text-align:center;color:var(--text-muted);font-size:13px">
+        No students with zero attended visits in the current filters.
+      </div>
+    </div>
   </div>
 </div>
 
@@ -800,6 +830,83 @@ function sortAtRisk(key) {
   if (atRiskSortKey === key) atRiskSortDir *= -1;
   else { atRiskSortKey = key; atRiskSortDir = (key === 'student' || key === 'course') ? 1 : -1; }
   renderAtRiskTable();
+}
+
+// ── Never Attended ────────────────────────────────────────────────────────────
+let neverAttendedData = [];
+let neverAttendedSortKey = 'total';
+let neverAttendedSortDir = -1;
+
+function buildNeverAttendedData(filtered) {
+  const byStudent = {};
+  for (const r of filtered) {
+    if (!r.studentId) continue;
+    if (!byStudent[r.studentId]) {
+      byStudent[r.studentId] = {
+        studentId: r.studentId,
+        student: r.student || ('ID: ' + r.studentId),
+        total: 0, missed: 0, canceled: 0, attended: 0,
+        courses: new Set(),
+        tutors: new Set(),
+        lastAppt: null,
+      };
+    }
+    const s = byStudent[r.studentId];
+    s.total++;
+    if (r.Status === 'Attended') s.attended++;
+    else if (r.Status === 'Missed') s.missed++;
+    else if (r.Status === 'Canceled') s.canceled++;
+    if (r.CourseCode && r.CourseCode !== 'nan') s.courses.add(r.CourseCode);
+    s.tutors.add(r.tutor);
+    if (!s.lastAppt || r.Date > s.lastAppt) s.lastAppt = r.Date;
+  }
+
+  return Object.values(byStudent)
+    .filter(s => s.attended === 0 && s.total > 0)
+    .map(s => ({
+      ...s,
+      courses: [...s.courses].sort().join(', ') || '—',
+      tutors: [...s.tutors].filter(Boolean).sort().join(', ') || '—',
+    }));
+}
+
+function renderNeverAttendedTable() {
+  const data = [...neverAttendedData];
+  data.sort((a, b) => {
+    let va = a[neverAttendedSortKey] ?? '', vb = b[neverAttendedSortKey] ?? '';
+    if (typeof va === 'string') return neverAttendedSortDir * va.localeCompare(vb);
+    return neverAttendedSortDir * (va - vb);
+  });
+
+  document.getElementById('neverAttendedCount').textContent = data.length + ' student' + (data.length !== 1 ? 's' : '');
+
+  const tbody = document.getElementById('neverAttendedTableBody');
+  const empty = document.getElementById('neverAttendedEmpty');
+
+  if (!data.length) {
+    tbody.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+
+  const fmt = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : '—';
+
+  tbody.innerHTML = data.map(s => `<tr>
+    <td><strong>${s.student}</strong></td>
+    <td style="text-align:center">${s.total}</td>
+    <td style="text-align:center"><span style="background:#FEE2E2;color:#991B1B;padding:2px 8px;border-radius:12px;font-weight:700;font-size:13px">${s.missed}</span></td>
+    <td style="text-align:center">${s.canceled}</td>
+    <td style="font-size:12px;color:var(--text-muted)">${s.courses}</td>
+    <td style="font-size:12px;color:var(--text-muted)">${s.tutors}</td>
+    <td style="font-size:12px">${fmt(s.lastAppt)}</td>
+  </tr>`).join('');
+}
+
+function sortNeverAttended(key) {
+  if (neverAttendedSortKey === key) neverAttendedSortDir *= -1;
+  else { neverAttendedSortKey = key; neverAttendedSortDir = key === 'student' ? 1 : -1; }
+  renderNeverAttendedTable();
 }
 
 // ── Chart Registry ────────────────────────────────────────────────────────────
@@ -929,6 +1036,8 @@ function applyFilters() {
   // Recompute at-risk data
   atRiskData = buildAtRiskData(filtered);
   renderAtRiskTable();
+  neverAttendedData = buildNeverAttendedData(filtered);
+  renderNeverAttendedTable();
 }
 
 function buildTutorData(records) {
