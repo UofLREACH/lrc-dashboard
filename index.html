@@ -442,11 +442,19 @@
       <div class="chart-card">
         <div class="chart-title">Appointment Heatmap</div>
         <div class="chart-subtitle">Number of appointments by day and time — darker = more</div>
-        <div style="margin-bottom:14px">
-          <label style="font-size:12px;font-weight:600;color:var(--text-muted);margin-right:8px">Course</label>
-          <select id="heatmapCourseFilter" onchange="rebuildHeatmapOnly()" style="font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);color:var(--text);background:white;cursor:pointer">
-            <option value="">All Courses</option>
-          </select>
+        <div style="margin-bottom:14px;display:flex;gap:16px;flex-wrap:wrap;align-items:center">
+          <div>
+            <label style="font-size:12px;font-weight:600;color:var(--text-muted);margin-right:8px">Course</label>
+            <select id="heatmapCourseFilter" onchange="rebuildHeatmapOnly()" style="font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);color:var(--text);background:white;cursor:pointer">
+              <option value="">All Courses</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;color:var(--text-muted);margin-right:8px">Week</label>
+            <select id="heatmapWeekFilter" onchange="rebuildHeatmapOnly()" style="font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);color:var(--text);background:white;cursor:pointer">
+              <option value="">All Weeks</option>
+            </select>
+          </div>
         </div>
         <div class="heatmap-tabs">
           <button class="heatmap-tab-btn active" onclick="switchHeatmap('all',this)">All Appointments</button>
@@ -1569,6 +1577,11 @@ function applyFilters() {
   const courses = [...new Set(filtered.map(r => r.CourseCode).filter(c => c && c.toLowerCase() !== 'nan'))].sort();
   heatmapSel.innerHTML = '<option value="">All Courses</option>' + courses.map(c => `<option value="${c}"${c===prevCourse?' selected':''}>${c}</option>`).join('');
 
+  const weekSel = document.getElementById('heatmapWeekFilter');
+  const prevWeek = weekSel.value;
+  const weeks = [...new Set(filtered.map(r => r.WeekNum).filter(Boolean))].sort((a,b) => a - b);
+  weekSel.innerHTML = '<option value="">All Weeks</option>' + weeks.map(w => `<option value="${w}"${String(w)===prevWeek?' selected':''}>Week ${w}</option>`).join('');
+
   // Recompute chart data from filtered records
   rebuildAllCharts(filtered);
 
@@ -1672,7 +1685,9 @@ function buildSingleHeatmap(records, gridId, legendId, label) {
 
 function buildHeatmap(filtered) {
   const course = document.getElementById('heatmapCourseFilter').value;
-  const base = course ? filtered.filter(r => r.CourseCode === course) : filtered;
+  const week = document.getElementById('heatmapWeekFilter').value;
+  let base = course ? filtered.filter(r => r.CourseCode === course) : filtered;
+  if (week) base = base.filter(r => String(r.WeekNum) === week);
   buildSingleHeatmap(base, 'heatmapGrid', 'heatmapLegend', 'appointments');
   buildSingleHeatmap(base.filter(r => r.Status === 'Missed'), 'heatmapGridMissed', 'heatmapLegendMissed', 'no-shows');
   buildSingleHeatmap(base.filter(r => r.Status === 'Canceled'), 'heatmapGridCanceled', 'heatmapLegendCanceled', 'cancellations');
