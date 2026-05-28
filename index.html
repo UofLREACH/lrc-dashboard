@@ -748,7 +748,7 @@
       </div>
       <div class="chart-card">
         <div class="chart-title">Early vs Late Semester Starters</div>
-        <div class="chart-subtitle">Week of first appointment &mdash; attendance rate by group</div>
+        <div class="chart-subtitle">Average attended visits per student by when they first booked</div>
         <div class="chart-wrap"><canvas id="chartStarterGroups" height="220"></canvas></div>
       </div>
     </div>
@@ -1150,24 +1150,44 @@ function buildStudentInsights(filtered) {
     options: { ...barOpts(), plugins: { legend: { display: false } }, scales: { x: { title: { display: true, text: 'Number of Attended Visits' } }, y: { beginAtZero: true } } }
   });
 
-  // Early/Late starter groups
-  const groups = { 'Weeks 1–3 (Early)': { att: 0, total: 0 }, 'Weeks 4–7 (Mid)': { att: 0, total: 0 }, 'Week 8+ (Late)': { att: 0, total: 0 } };
-  for (const s of students) {
-    const g = s.firstWeek <= 3 ? 'Weeks 1–3 (Early)' : s.firstWeek <= 7 ? 'Weeks 4–7 (Mid)' : 'Week 8+ (Late)';
-    groups[g].att += s.attended;
-    groups[g].total += s.total;
-  }
+  // Early/Late starter groups — avg attended visits per student
+  const groupDefs = [
+    { label: 'Weeks 1–3\n(Early)', key: 'early', test: s => s.firstWeek <= 3 },
+    { label: 'Weeks 4–7\n(Mid)',   key: 'mid',   test: s => s.firstWeek >= 4 && s.firstWeek <= 7 },
+    { label: 'Week 8+\n(Late)',    key: 'late',  test: s => s.firstWeek >= 8 },
+  ];
+  const groupData = groupDefs.map(g => {
+    const members = students.filter(g.test);
+    const avgAtt = members.length ? +(members.reduce((sum, s) => sum + s.attended, 0) / members.length).toFixed(1) : 0;
+    const avgTotal = members.length ? +(members.reduce((sum, s) => sum + s.total, 0) / members.length).toFixed(1) : 0;
+    return { label: g.label, count: members.length, avgAtt, avgTotal };
+  });
+
   destroyChart('chartStarterGroups');
   charts['chartStarterGroups'] = new Chart(document.getElementById('chartStarterGroups'), {
     type: 'bar',
     data: {
-      labels: Object.keys(groups),
+      labels: groupData.map(g => g.label),
       datasets: [
-        { label: 'Attended', data: Object.values(groups).map(g => g.att), backgroundColor: C_GREEN_A, stack: 's' },
-        { label: 'Total', data: Object.values(groups).map(g => g.total - g.att), backgroundColor: C_GRAY_A, stack: 's' },
+        { label: 'Avg Attended Visits', data: groupData.map(g => g.avgAtt), backgroundColor: C_GREEN_A },
+        { label: 'Avg Total Appointments', data: groupData.map(g => g.avgTotal), backgroundColor: C_GRAY_A },
       ]
     },
-    options: { ...barOpts(), scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } }
+    options: {
+      ...barOpts(),
+      scales: { y: { beginAtZero: true, title: { display: true, text: 'Avg visits per student' } } },
+      plugins: {
+        ...barOpts().plugins,
+        tooltip: {
+          callbacks: {
+            afterBody: (items) => {
+              const g = groupData[items[0].dataIndex];
+              return `Students in group: ${g.count.toLocaleString()}`;
+            }
+          }
+        }
+      }
+    }
   });
 
   renderLapsedTable();
